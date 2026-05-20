@@ -56,17 +56,61 @@ const ABOUT_INTRO_PARAGRAPHS = [
   {
     tone: "default",
     text:
-      "This project combines shelf-level computer vision, a custom trained yolo model, retail data workflows, predictive analytics, and data visualization into one integrated decision system built for modern retail operations.",
+      "Customer Behaviour Analysis(CBA) combines shelf-level computer vision, a custom trained yolo model, retail data workflows, predictive analytics, and data visualization into one integrated decision system built for modern retail operations.",
   },
   {
     tone: "insight",
     text:
-      "Its purpose is to reveal pre-purchase customer intent, connect behavior signals with sales outcomes, and help retail teams act on revenue risks before they appear in transactional reports.",
+      "Unless traditional POS systems, its purpose is to reveal pre-purchase customer intent and connect those behavior signals with actualsales outcomes. This helps retail teams act on revenue risks before they appear in transactional reports.",
   },
   {
     tone: "accent",
     text:
-      "Instead of asking only what sold, the platform is designed to explain what customers noticed, touched, held, removed, or ignored, then transform those behaviors into measurable demand signals and operational priorities for faster and smarter business decisions.",
+      "Instead of asking only what were sold, the platform is designed to explain what customers noticed, touched, held, removed, or ignored, then transform those behaviors into measurable signals for faster and smarter business decisions.",
+  },
+];
+const ABOUT_TRAINING_IMAGES = [
+  {
+    src: "/images/labels.jpg",
+    alt: "Dataset label distribution for customer interaction training data",
+    caption: "Label density, class balance, and annotation spread across the retail interaction dataset.",
+  },
+  {
+    src: "/images/results.png",
+    alt: "Training results chart for the retail interaction model",
+    caption: "Training and validation metrics across the full 50-epoch schedule.",
+  },
+  {
+    src: "/images/confusion_matrix_normalized.png",
+    alt: "Normalized confusion matrix for the interaction model",
+    caption: "Normalized confusion matrix showing relative overlap across the four interaction classes.",
+  },
+  {
+    src: "/images/confusion_matrix.png",
+    alt: "Raw confusion matrix for the interaction model",
+    caption: "Raw confusion matrix counts from the evaluation split for the current model checkpoint.",
+  },
+];
+const ABOUT_LIMITATION_IMAGES = [
+  {
+    src: "/images/BoxP_curve.png",
+    alt: "Precision curve for the interaction model",
+    caption: "Precision behavior across confidence thresholds, useful for understanding false-positive tradeoffs.",
+  },
+  {
+    src: "/images/BoxR_curve.png",
+    alt: "Recall curve for the interaction model",
+    caption: "Recall behavior across thresholds, showing how easily first-contact events can still be missed.",
+  },
+  {
+    src: "/images/BoxF1_curve.png",
+    alt: "F1 score curve for the interaction model",
+    caption: "F1 balance across thresholds, highlighting the practical operating zone of the current model.",
+  },
+  {
+    src: "/images/BoxPR_curve.png",
+    alt: "Precision recall curve for the interaction model",
+    caption: "Precision-recall behavior under real scene constraints, useful for understanding current boundary conditions.",
   },
 ];
 const ABOUT_SECTIONS = [
@@ -87,7 +131,7 @@ const ABOUT_SECTIONS = [
       {
         tone: "accent",
         text:
-          "By the time these problems appear clearly in sales reports, revenue opportunities may already be missed. Our system was built to make these hidden pre-purchase behaviors visible, measurable, and actionable so retailers can respond earlier with smarter decisions.",
+          "By the time these problems appear clearly in sales reports, revenue opportunities may already be missed or never realized at all. Our system was built to make these hidden pre-purchase behaviors visible, measurable, and actionable for retail management.",
       },
       {
         tone: "warning",
@@ -98,46 +142,52 @@ const ABOUT_SECTIONS = [
   },
   {
     title: "02. How the Intelligence Engine Works",
-    visual: "stack",
-    paragraphs: [
-      {
-        tone: "default",
-        text:
-          "The platform operates as an end-to-end retail intelligence pipeline that transforms raw shelf activity into business insight. Shelf-facing camera feeds capture real customer interactions in-store,and then the computer vision layer continuously detects behavior states such as no interaction, touching shelf, holding product, and item removed.",
-      },
-      {
-        tone: "insight",
-        text:
-          "These raw detections are then passed into backend services where raw data are cleaned, timestamped, structured, and enriched with business context. The system connects behavior signals with transactional sales data and product placement on shelf to create one unified operational dataset (heatmap and KPIs).",
-      },
-      {
-        tone: "accent",
-        text:
-          "The computer vision not only captures the type of customer interaction, but also records the exact coordinates where the interaction occurs. This enables the system to plot interaction points on the live monitoring screen and the heatmap dashboard. The heatmap can then be overlaid with shelf-product placement information, allowing further analysis of which products were interacted with and how many times each product received customer attention.",
-      },
-    ],
-  },
+    visual: "pipeline",
+      paragraphs: [
+        {
+          tone: "default",
+          text:
+            "The platform now operates through two coordinated data paths.",
+        },
+        {
+          tone: "insight",
+          text:
+            "For sample demonstrations (DEMO INPUTS) , videos are played in the frontend and overlaid with interactions boxes, generated from an already recorded dataset generated from the current YOLO model. Because the bottleneck between the backend and frontend is very small, live playback and live analysis from the backend modelsare nearly seamless. This frontend hosting method allows smooth browser playback while preserving the acurate presentation of model behaviours.",
+        },
+        {
+          tone: "insight",
+          text:
+            "For users uploaded videos (CUSTOM INPUTS), the pipeline uses FastAPI upload sessions (as 'chunks') -> configured shelf-zone setup -> YOLO detection at backend, interaction-chain tracking(Marker chains), and backend event processing to generate analytics streams.",
+        },
+        {
+          tone: "accent",
+          text:
+            "For Data Visualization, camera playback, shelf-zone overlays, interaction points, heatmaps, and the Product Overlay Board are all fed from the same event pipeline. Exact interaction coordinates are retained as operational points, linked back to shelf-product placement, and accumulated into rolling analytics state so the system can show both live visual evidence and persistent business insight in one dashboard experience.",
+        },
+      ],
+    },
   {
     title: "03. How We Built and Trained the Model",
     visual: "training",
-    paragraphs: [
-      {
-        tone: "default",
-        text:
-          "The vision model was trained on a custom behavior-focused dataset collected under realistic retail conditions because large public datasets for shelf interaction behavior are limited. Source footage was manually gathered from 11 videos using shelf-facing viewpoints in store environments.",
-      },
-      {
-        tone: "insight",
-        text:
-          "The labels included \"No Interaction\", \"Touching Shelf\", \"Holding Product\", and \"Item Removed\". Annotation was completed in CVAT, with 10 videos labeled for model development and 1 video reserved exclusively for final testing. To reduce data leakage caused by highly correlated adjacent frames, the dataset split was performed at the video level rather than at the random image level. During training, the model achieved a validation accuracy of approximately 60%, indicating moderate classification performance on unseen validation data.",
-      },
-      {
-        tone: "accent",
-        text:
-          "The final dataset consisted of 7 training videos with 9,554 images, 3 validation videos with 3,024 images, and 1 unseen test video. Training was performed using the Ultralytics YOLO pipeline for 50 epochs, and best validation performance was reached around epoch 25 with precision 0.7269, recall 0.5895, mAP@50 0.6091, and mAP@50-95 0.2525.",
-      },
-    ],
-  },
+    images: ABOUT_TRAINING_IMAGES,
+      paragraphs: [
+        {
+          tone: "default",
+          text:
+            "The vision component was trained on custom shelf-interaction videos recorded using phone cameras because large public datasets for this exact retail behavior problem are very limited. All 11 footage samples were recorded with cameras facing the shelf sideways in real retail environments, with volunteers interacting naturally to capture realistic browsing, touching, holding, and removal behavior.",
+        },
+        {
+          tone: "insight",
+          text:
+            "The recorded footage was manually labeled frame by frame in CVAT for both the training and validation sets. The label classes were 'No Interaction,' 'Touching Shelf,' 'Holding Product,' and 'Item Removed.' Ten videos were used for development, while one full video was held out for final testing. To reduce leakage from highly correlated adjacent frames, the split was performed at the video level rather than through random image sampling.",
+        },
+        {
+          tone: "accent",
+          text:
+            "The final training set contains 7 training videos with 9,554 images, 3 validation videos with 3,024 images, and 1 unseen test video. Training was performed with the Ultralytics YOLO pipeline for 50 epochs, and the strongest validation checkpoint appeared around epoch 25 with precision 0.7269, recall 0.5895, mAP@50 of 0.6091, and mAP@50-95 of 0.2525. These figures support a functional retail analysis pipeline, while still leaving clear room for improvement in robustness and generalization.",
+        },
+      ],
+    },
   {
     title: "04. Data Analysis and Predictive Intelligence",
     visual: "predictive",
@@ -150,7 +200,7 @@ const ABOUT_SECTIONS = [
       {
         tone: "accent",
         text:
-          "By combining behavior, sales, and inventory records, the system enables predictive KPIs that traditional reporting tools cannot easily provide. The funnel below shows how attention narrows from shelf contact to actual purchase, giving retailers a concrete view of where intent is being lost.",
+          "By combining behavior, sales, and inventory records, the system enables predictive KPIs that traditional reporting tools cannot easily provide. The funnel shows how attention narrows from shelf contact to actual purchase, giving retailers a concrete view of where intent is being lost.",
       },
     ],
   },
@@ -161,22 +211,59 @@ const ABOUT_SECTIONS = [
       {
         tone: "default",
         text:
-          "The main commercial value of the system is its ability to connect customer behavior directly with operational action. Retail teams can identify products receiving strong attention but weak sales conversion, revealing possible pricing issues, packaging friction, or poor product positioning.",
+          "The main business value of the system is that it helps retail teams see where customer interest is strong but sales results are weak. When a product gets a lot of attention but does not convert, it can signal pricing issues, poor placement, weak packaging appeal, or stock-related friction.",
       },
       {
         tone: "warning",
         text:
-          "Managers can detect shelf zones with repeated engagement but low purchase completion, highlighting layout inefficiencies, merchandising opportunities, or stock-related friction before those issues become obvious in transactional reporting.",
+          "Managers can also spot shelf areas where customers engage repeatedly but still do not complete a purchase. This makes it easier to identify layout problems, merchandising gaps, or availability issues before they become obvious in sales reports.",
       },
       {
         tone: "accent",
         text:
-          "The platform can surface demand signals earlier than transaction reports, allowing faster replenishment, better assortment planning, and quicker intervention before revenue loss occurs. Overall, the system shifts store management from reactive reporting toward proactive growth optimization.",
+          "By showing demand signals earlier than traditional transaction reporting, the platform supports faster replenishment, better assortment planning, and quicker action on underperforming shelf areas. In business terms, it helps retailers move from reacting to lost sales after the fact to improving performance while opportunities still exist.",
       },
     ],
   },
   {
-    title: "06. Contributors",
+    title: "06. Limitations",
+    visual: "limitations",
+    images: ABOUT_LIMITATION_IMAGES,
+    paragraphs: [
+      {
+        tone: "default",
+        title: "Model accuracy:",
+        text:
+          "the current behavior model is useful for directional retail analysis, but it is not yet a perfect frame-level representation of human interaction. Performance still depends on factors such as camera angle, lighting, shelf visibility, occlusion, motion speed, and similarity to the training footage. Some early contact frames may still be missed, overlapping states can occur, and confidence tradeoffs remain necessary.",
+      },
+      {
+        tone: "default",
+        title: "Points overlaying system:",
+        text:
+          "interaction points are estimated from detected regions, shelf geometry, and temporal matching rather than exact hand keypoints. The points should therefore be interpreted as stable operational estimates, not exact physical contact pixels. Fast motion, partial visibility, overlapping people, and repeated detections can still create chain-merging or chain-splitting edge cases.",
+      },
+      {
+        tone: "default",
+        title: "Potential usage:",
+        text:
+          "the system is best suited for operational decision support, including attention hotspot detection, low-conversion shelf analysis, product interaction ranking, placement investigation, replenishment prioritization, and demand monitoring. It is less suitable as a legal/compliance tool or as a perfect replacement for manual research annotation.",
+      },
+      {
+        tone: "default",
+        title: "Bottleneck:",
+        text:
+          "current bottlenecks mainly involve video processing throughput, replay generation time, upload-to-analysis latency, and maintaining stable interaction rendering while preserving accurate event chains. Larger deployments would require stronger batching, queueing, caching, and infrastructure optimization.",
+      },
+      {
+        tone: "default",
+        title: "Additional limitation areas:",
+        text:
+          "broader deployment would still require more engineering around camera calibration, asynchronous processing, data persistence, scalability, long-term reliability, and operational governance. The current implementation is a strong integrated prototype demonstrating the full workflow from shelf behavior to analytics.",
+      },
+    ],
+  },
+  {
+    title: "07. Contributors",
     visual: "contributors",
     textVariant: "credit",
     paragraphs: [
@@ -191,15 +278,8 @@ const ABOUT_SECTIONS = [
 const ABOUT_COMPARISON_ROWS = [
   { traditional: "Knows what sold", system: "Knows what customers considered" },
   { traditional: "Revenue after purchase", system: "Intent before purchase" },
-  { traditional: "Detects loss late", system: "Detects risk early" },
+  { traditional: "Detects loss late", system: "Detects risks early & Identifies the cause" },
   { traditional: "Sales only", system: "Behavior + Sales" },
-];
-const ABOUT_ARCHITECTURE_LAYERS = [
-  "Input Layer",
-  "AI Detection Layer",
-  "Data Layer",
-  "Prediction Layer",
-  "Dashboard Layer",
 ];
 const ABOUT_TRAINING_METRICS = [
   { metric: "Source Videos", value: "11" },
@@ -219,8 +299,8 @@ const ABOUT_FUNNEL_STEPS = [
   { label: "Purchases", value: "45", width: 20 },
 ];
 const ABOUT_OPERATIONAL_INPUTS = [
-  { label: "Behavior Signals", detail: "touch, hold, remove" },
-  { label: "Sales Outcomes", detail: "conversion and revenue" },
+  { label: "Behavior Signals(CBA)", detail: "touch, hold, remove" },
+  { label: "Sales Outcomes(POS)", detail: "conversion and revenue" },
   { label: "Inventory State", detail: "stock and shelf ratio" },
 ];
 const ABOUT_OPERATIONAL_ACTIONS = [
@@ -934,6 +1014,174 @@ function SvgMultilineText({ x, y, lines, lineHeight = 18, ...props }) {
   );
 }
 
+function wrapSvgText(text, maxCharsPerLine) {
+  if (!text) {
+    return [];
+  }
+
+  const words = text.split(" ");
+  const lines = [];
+  let currentLine = "";
+
+  words.forEach((word) => {
+    const candidate = currentLine ? `${currentLine} ${word}` : word;
+    if (candidate.length > maxCharsPerLine && currentLine) {
+      lines.push(currentLine);
+      currentLine = word;
+    } else {
+      currentLine = candidate;
+    }
+  });
+
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
+}
+
+function AboutPipelineSection({ x, width, title, subtitle }) {
+  return (
+    <g>
+      <rect
+        fill="url(#aboutPipelineSectionFill)"
+        fillOpacity="0.94"
+        height="710"
+        rx="40"
+        stroke="#ffffff"
+        strokeOpacity="0.06"
+        width={width}
+        x={x}
+        y="62"
+      />
+      <text fill="#fff3e7" fontSize="20" fontWeight="800" x={x + 26} y="110">
+        {title}
+      </text>
+      <text fill="rgba(244, 239, 232, 0.5)" fontSize="11.5" x={x + 26} y="130">
+        {subtitle}
+      </text>
+      <line
+        stroke="#ffffff"
+        strokeOpacity="0.07"
+        strokeWidth="1.4"
+        x1={x + 26}
+        x2={x + width - 26}
+        y1="144"
+        y2="144"
+      />
+    </g>
+  );
+}
+
+function AboutPipelineCard({
+  x,
+  y,
+  width,
+  height,
+  kicker,
+  titleLines,
+  bulletLines,
+  accent = "#ffd7b9",
+  emphasis = "normal",
+}) {
+  const isStrong = emphasis === "strong";
+  const isMuted = emphasis === "muted";
+  const fillColor = isStrong
+    ? "url(#aboutPipelineCardFillStrong)"
+    : isMuted
+      ? "url(#aboutPipelineCardFillMuted)"
+      : "url(#aboutPipelineCardFill)";
+  const strokeOpacity = isStrong ? "0.18" : isMuted ? "0.06" : "0.1";
+  const limitedBullets = bulletLines.slice(0, 3);
+  const titleFontSize = isStrong ? 18 : isMuted ? 15.5 : 17;
+  const titleLineHeight = isStrong ? 19 : 18;
+  const bulletFontSize = isMuted ? 10.8 : 11.2;
+  const bulletOpacity = isMuted ? "0.72" : "1";
+  const kickerOpacity = isMuted ? "0.82" : "1";
+  const topBarOpacity = isStrong ? "0.22" : isMuted ? "0.08" : "0.14";
+  const maxBulletChars = Math.max(18, Math.floor((width - 54) / (bulletFontSize * 0.58)));
+  const wrappedBullets = limitedBullets.map((line) => wrapSvgText(line, maxBulletChars));
+  let bulletCursorY = y + 110;
+
+  return (
+    <g filter="url(#aboutPipelineCardShadow)">
+      <rect
+        fill={fillColor}
+        fillOpacity="0.96"
+        height={height}
+        rx="30"
+        stroke="#ffffff"
+        strokeOpacity={strokeOpacity}
+        width={width}
+        x={x}
+        y={y}
+      />
+      <rect
+        fill={accent}
+        fillOpacity={topBarOpacity}
+        height="4"
+        rx="2"
+        width={width - 34}
+        x={x + 17}
+        y={y + 14}
+      />
+      <text fill={accent} fillOpacity={kickerOpacity} fontSize="9.4" fontWeight="800" x={x + 18} y={y + 36}>
+        {kicker}
+      </text>
+      <SvgMultilineText
+        fill="#fff5e9"
+        fontSize={titleFontSize}
+        fontWeight="700"
+        lineHeight={titleLineHeight}
+        lines={titleLines}
+        x={x + 18}
+        y={y + 66}
+      />
+      {wrappedBullets.map((lines, index) => {
+        const bulletY = bulletCursorY;
+        bulletCursorY += lines.length * 14 + 8;
+        return (
+          <g key={`${limitedBullets[index]}-${index}`}>
+            <circle cx={x + 21} cy={bulletY - 4} fill={accent} fillOpacity={isMuted ? "0.7" : "0.94"} r="3" />
+            <SvgMultilineText
+              fill="#d7dee9"
+              fillOpacity={bulletOpacity}
+              fontSize={bulletFontSize}
+              lineHeight={13.5}
+              lines={lines}
+              x={x + 31}
+              y={bulletY}
+            />
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+function AboutPipelineArrow({ path, kind = "primary" }) {
+  const isSecondary = kind === "secondary";
+  const isSupport = kind === "support";
+  const stroke = isSecondary ? "#86aed5" : isSupport ? "#aeb8c7" : "#f7b68f";
+  const marker = isSecondary ? "url(#aboutPipelineArrowHeadSecondary)" : "url(#aboutPipelineArrowHeadPrimary)";
+  const strokeWidth = isSecondary ? "1.3" : isSupport ? "1.35" : "2.85";
+  const strokeOpacity = isSecondary ? "0.28" : isSupport ? "0.24" : "0.94";
+
+  return (
+    <g>
+      <path
+        d={path}
+        fill="none"
+        markerEnd={marker}
+        stroke={stroke}
+        strokeDasharray={isSecondary ? "8 8" : undefined}
+        strokeOpacity={strokeOpacity}
+        strokeWidth={strokeWidth}
+      />
+    </g>
+  );
+}
+
 function AboutComparisonVisual() {
   return (
     <div className="landing-about__visual">
@@ -943,7 +1191,7 @@ function AboutComparisonVisual() {
           <thead>
             <tr>
               <th>Traditional POS Only</th>
-              <th>Our System</th>
+              <th>Our CBA System</th>
             </tr>
           </thead>
           <tbody>
@@ -960,85 +1208,262 @@ function AboutComparisonVisual() {
   );
 }
 
-function AboutStackVisual() {
-  const layerColors = ["#404a5e", "#394558", "#334153", "#2d3c4e", "#28384a"];
-
+function AboutPipelineVisual() {
   return (
     <div className="landing-about__visual">
-      <span className="about-visual__kicker">Stacked layer diagram</span>
+      <span className="about-visual__kicker">End-to-end data pipeline</span>
       <div className="about-svg-shell">
         <svg
-          aria-label="Stacked layer diagram showing the retail intelligence engine"
-          className="about-svg about-svg--stack"
+          aria-label="End-to-end data pipeline showing sample replay generation, backend inference, storage, APIs, and frontend dashboard updates"
+          className="about-svg about-svg--pipeline"
           role="img"
-          viewBox="0 0 920 430"
+          viewBox="0 0 1120 820"
         >
+          <defs>
+            <linearGradient id="aboutPipelineSectionFill" x1="0%" x2="100%" y1="0%" y2="100%">
+              <stop offset="0%" stopColor="#202732" stopOpacity="0.98" />
+              <stop offset="100%" stopColor="#1a212b" stopOpacity="0.98" />
+            </linearGradient>
+            <linearGradient id="aboutPipelineCardFill" x1="0%" x2="100%" y1="0%" y2="100%">
+              <stop offset="0%" stopColor="#293345" />
+              <stop offset="100%" stopColor="#243041" />
+            </linearGradient>
+            <linearGradient id="aboutPipelineCardFillStrong" x1="0%" x2="100%" y1="0%" y2="100%">
+              <stop offset="0%" stopColor="#2b3749" />
+              <stop offset="100%" stopColor="#263244" />
+            </linearGradient>
+            <linearGradient id="aboutPipelineCardFillMuted" x1="0%" x2="100%" y1="0%" y2="100%">
+              <stop offset="0%" stopColor="#273141" />
+              <stop offset="100%" stopColor="#232d3c" />
+            </linearGradient>
+            <filter id="aboutPipelineCardShadow" x="-20%" y="-20%" width="140%" height="160%">
+              <feDropShadow dx="0" dy="16" floodColor="#02060c" floodOpacity="0.24" stdDeviation="16" />
+            </filter>
+            <marker
+              id="aboutPipelineArrowHeadPrimary"
+              markerHeight="7"
+              markerUnits="strokeWidth"
+              markerWidth="7"
+              orient="auto"
+              refX="6"
+              refY="3.5"
+            >
+              <path d="M0,0 L7,3.5 L0,7 z" fill="#f7b68f" />
+            </marker>
+            <marker
+              id="aboutPipelineArrowHeadSecondary"
+              markerHeight="6"
+              markerUnits="strokeWidth"
+              markerWidth="6"
+              orient="auto"
+              refX="5"
+              refY="3"
+            >
+              <path d="M0,0 L6,3 L0,6 z" fill="#8fb7de" />
+            </marker>
+          </defs>
           <rect
             fill="#121720"
-            fillOpacity="0.46"
-            height="408"
-            rx="34"
-            width="900"
-            x="10"
-            y="11"
+            fillOpacity="0.00"
+            height="796"
+            rx="40"
+            width="1096"
+            x="12"
+            y="0"
           />
-          {ABOUT_ARCHITECTURE_LAYERS.map((layer, index) => {
-            const y = 36 + index * 74;
-            return (
-              <g key={layer}>
-                {index < ABOUT_ARCHITECTURE_LAYERS.length - 1 ? (
-                  <line
-                    stroke="#ffffff"
-                    strokeOpacity="0.18"
-                    strokeWidth="2"
-                    x1="155"
-                    x2="155"
-                    y1={y + 52}
-                    y2={y + 74}
-                  />
-                ) : null}
-                <rect
-                  fill={layerColors[index]}
-                  fillOpacity="0.94"
-                  height="52"
-                  rx="26"
-                  stroke="#ffffff"
-                  strokeOpacity="0.09"
-                  width="680"
-                  x="120"
-                  y={y}
-                />
-                <circle
-                  cx="155"
-                  cy={y + 26}
-                  fill="#f1884f"
-                  fillOpacity="0.22"
-                  r="18"
-                  stroke="#ffd7b9"
-                  strokeOpacity="0.38"
-                />
-                <text
-                  fill="#ffd7b9"
-                  fontSize="14"
-                  fontWeight="700"
-                  textAnchor="middle"
-                  x="155"
-                  y={y + 31}
-                >
-                  {`0${index + 1}`}
-                </text>
-                <text
-                  fill="#f7f0e7"
-                  fontSize="19"
-                  fontWeight="600"
-                  x="190"
-                  y={y + 33}
-                >
-                  {layer}
-                </text>
-              </g>
-            );
-          })}
+          <AboutPipelineSection
+            subtitle="Video sources and setup"
+            title="Inputs"
+            width={260}
+            x={34}
+          />
+          <AboutPipelineSection
+            subtitle="Replay generation and live inference"
+            title="Processing & AI"
+            width={260}
+            x={302}
+          />
+          <AboutPipelineSection
+            subtitle="Event storage and delivery"
+            title="Storage & APIs"
+            width={260}
+            x={570}
+          />
+          <AboutPipelineSection
+            subtitle="Playback, dashboards, and board updates"
+            title="Frontend Experience"
+            width={260}
+            x={838}
+          />
+
+          <AboutPipelineCard
+            accent="#ffbe93"
+            bulletLines={["Frontend-hosted MP4s", "Smooth browser playback"]}
+            height={156}
+            kicker="DEMO INPUTS"
+            titleLines={["Recorded", "samples"]}
+            width={208}
+            x={50}
+            y={200}
+          />
+          <AboutPipelineCard
+            accent="#ffbe93"
+            bulletLines={["Rotate video + place zone", "Chunked upload to backend"]}
+            height={176}
+            kicker="CUSTOM INPUTS"
+            titleLines={["Upload +", "shelf setup"]}
+            width={208}
+            x={50}
+            y={372}
+          />
+            <AboutPipelineCard
+              accent="#ffbe93"
+              bulletLines={["Zones, slots, product layout", "Shared by replay + live analysis"]}
+              height={172}
+              emphasis="muted"
+              kicker="CONFIG"
+              titleLines={["Shelf zones +", "mapping"]}
+              width={220}
+              x={50}
+              y={562}
+            />
+
+            <AboutPipelineCard
+              accent="#8ff0b6"
+              bulletLines={["Local YOLO replay pass", "Boxes + points + history"]}
+              emphasis="strong"
+              height={148}
+              kicker="OFFLINE REPLAY"
+              titleLines={["Replay", "generation"]}
+              width={220}
+              x={318}
+              y={200}
+            />
+            <AboutPipelineCard
+              accent="#8ff0b6"
+              bulletLines={["FastAPI upload sessions", "Preview stream + saved setup"]}
+              height={164}
+              kicker="INGEST"
+              titleLines={["Upload preview", "+ ingest"]}
+              width={220}
+              x={318}
+              y={388}
+            />
+            <AboutPipelineCard
+              accent="#8ff0b6"
+              bulletLines={["Person, behavior, hand models", "Marker chains + heatmaps + KPIs"]}
+              emphasis="strong"
+              height={174}
+              kicker="LIVE AI ENGINE"
+              titleLines={["YOLO detection +", "interaction analysis"]}
+              width={220}
+              x={318}
+              y={568}
+            />
+
+          <AboutPipelineCard
+            accent="#8fc2ff"
+            bulletLines={["sample_replay_data.json", "Recorded overlays + events"]}
+            height={156}
+            emphasis="strong"
+            kicker="STATIC REPLAY DATA"
+            titleLines={["Recorded replay", "dataset"]}
+            width={208}
+            x={586}
+            y={200}
+          />
+            <AboutPipelineCard
+              accent="#8fc2ff"
+              bulletLines={["Heatmap events + camera logs", "Metrics + heatmaps + products"]}
+              emphasis="strong"
+              height={172}
+              kicker="LIVE DATA LAYER"
+              titleLines={["Analytics store", "+ delivery APIs"]}
+              width={208}
+              x={586}
+              y={452}
+            />
+
+            <AboutPipelineCard
+              accent="#d4b7ff"
+              bulletLines={[
+                "Video, shelf zone, boxes, points",
+                "Heatmap + Product Overlay Board",
+                "Sample replay or uploaded view",
+              ]}
+              emphasis="strong"
+              height={206}
+              kicker="USER-FACING EXPERIENCE"
+              titleLines={["Camera view +", "analytics UI"]}
+              width={224}
+              x={848}
+              y={246}
+            />
+            <AboutPipelineCard
+              accent="#d4b7ff"
+              bulletLines={["localStorage accumulation", "6000-event FIFO cap"]}
+              height={160}
+              emphasis="muted"
+              kicker="FRONTEND STATE"
+              titleLines={["Rolling analytics", "cache"]}
+              width={224}
+              x={848}
+              y={544}
+            />
+
+            <AboutPipelineArrow kind="primary" path="M258 268 L318 268" />
+            <AboutPipelineArrow kind="primary" path="M538 268 L586 268" />
+            <AboutPipelineArrow kind="primary" path="M794 268 L848 268" />
+
+            <AboutPipelineArrow kind="primary" path="M258 420 L318 420" />
+            <AboutPipelineArrow kind="primary" path="M428 537 L428 577" />
+            <AboutPipelineArrow kind="primary" path="M270 612 L318 612" />
+            <AboutPipelineArrow kind="primary" path="M530 616 L586 540" />
+            <AboutPipelineArrow kind="primary" path="M794 524 L848 386" />
+            <AboutPipelineArrow kind="primary" path="M960 422 L960 544" />
+
+          <rect
+            fill="rgba(247, 182, 143, 0.08)"
+            height="24"
+            rx="12"
+            stroke="rgba(247, 182, 143, 0.16)"
+            width="170"
+            x="337"
+            y="172"
+          />
+          <text fill="#ffd7b9" fontSize="10" fontWeight="800" textAnchor="middle" x="422" y="187">
+            RECORDED SAMPLE REPLAY FLOW
+          </text>
+
+          <rect
+            fill="rgba(143, 240, 182, 0.07)"
+            height="24"
+            rx="12"
+            stroke="rgba(143, 240, 182, 0.16)"
+            width="174"
+            x="335"
+            y="362"
+          />
+          <text fill="#c6f7da" fontSize="10" fontWeight="800" textAnchor="middle" x="422" y="378">
+            LIVE UPLOAD + ANALYSIS FLOW
+          </text>
+
+          <rect
+            fill="#111722"
+            fillOpacity="0.8"
+            height="40"
+            rx="20"
+            stroke="#ffffff"
+            strokeOpacity="0.08"
+            width="200"
+            x="438"
+            y="776"
+          />
+          <line stroke="#f7b68f" strokeOpacity="0.88" strokeWidth="2.2" x1="478" x2="512" y1="798" y2="798" />
+          <path d="M512,794 L518,798 L512,802 z" fill="#f7b68f" />
+          <text fill="#f3f6fb" fontSize="10.5" x="538" y="800">
+            Data flow
+          </text>
         </svg>
       </div>
     </div>
@@ -1067,6 +1492,9 @@ function AboutTrainingVisual() {
           </tbody>
         </table>
       </div>
+      <p className="landing-about__paragraph landing-about__paragraph--footnote">
+        Note: The current amount of frames (12,578) is nowhere near enough to train a production-grade model that is highly reliable, robust, and consistently accurate.
+      </p>
     </div>
   );
 }
@@ -1216,13 +1644,13 @@ function AboutImpactVisual() {
                   x="52"
                   y={y}
                 />
-                <text fill="#ffd7b9" fontSize="13" fontWeight="700" x="78" y={y + 28}>
+                <text fill="#ffd7b9" fontSize="11" fontWeight="700" x="78" y={y + 28}>
                   {`0${index + 1}`}
                 </text>
-                <text fill="#fff5e9" fontSize="18" fontWeight="700" x="78" y={y + 50}>
+                <text fill="#fff5e9" fontSize="16" fontWeight="700" x="78" y={y + 50}>
                   {item.label}
                 </text>
-                <text fill="#d7dee9" fontSize="13" x="78" y={y + 68}>
+                <text fill="#d7dee9" fontSize="11" x="78" y={y + 68}>
                   {item.detail}
                 </text>
                 <line
@@ -1248,26 +1676,26 @@ function AboutImpactVisual() {
             x="336"
             y="106"
           />
-          <text fill="#ffd7b9" fontSize="13" fontWeight="700" textAnchor="middle" x="460" y="144">
+          <text fill="#ffd7b9" fontSize="11" fontWeight="700" textAnchor="middle" x="460" y="144">
             OPERATIONAL DECISION LAYER
           </text>
           <SvgMultilineText
             fill="#fff5e9"
-            fontSize="21"
+            fontSize="16"
             fontWeight="700"
-            lineHeight={22}
+            lineHeight={16}
             lines={["Behavior +", "Sales + Inventory"]}
             textAnchor="middle"
             x="460"
             y="172"
           />
-          <text fill="#f2e7db" fontSize="12" textAnchor="middle" x="460" y="220">
+          <text fill="#f2e7db" fontSize="11" textAnchor="middle" x="460" y="220">
             conversion gap detection
           </text>
-          <text fill="#f2e7db" fontSize="12" textAnchor="middle" x="460" y="238">
+          <text fill="#f2e7db" fontSize="11" textAnchor="middle" x="460" y="238">
             demand and replenishment scoring
           </text>
-          <text fill="#f2e7db" fontSize="12" textAnchor="middle" x="460" y="256">
+          <text fill="#f2e7db" fontSize="11" textAnchor="middle" x="460" y="256">
             pricing and placement priority
           </text>
           {ABOUT_OPERATIONAL_ACTIONS.map((item, index) => {
@@ -1294,7 +1722,7 @@ function AboutImpactVisual() {
                   y1="190"
                   y2={y + 44}
                 />
-                <text fill="#8ff0b6" fontSize="13" fontWeight="700" x="664" y={y + 28}>
+                <text fill="#8ff0b6" fontSize="11" fontWeight="700" x="664" y={y + 28}>
                   ACTION
                 </text>
                 <SvgMultilineText
@@ -1306,13 +1734,36 @@ function AboutImpactVisual() {
                   x="664"
                   y={y + 46}
                 />
-                <text fill="#d7dee9" fontSize="13" x="664" y={y + 80}>
+                <text fill="#d7dee9" fontSize="11" x="664" y={y + 80}>
                   {item.detail}
                 </text>
               </g>
             );
           })}
         </svg>
+      </div>
+    </div>
+  );
+}
+
+function AboutLimitationsVisual() {
+  const limitationAreas = [
+    "Model confidence and class overlap",
+    "Interaction point stability under fast motion",
+    "Scene-specific calibration and shelf geometry",
+    "Deployment, scaling, and persistence boundaries",
+  ];
+
+  return (
+    <div className="landing-about__visual">
+      <span className="about-visual__kicker">Current system boundaries</span>
+      <div className="about-limitations__list">
+        {limitationAreas.map((item, index) => (
+          <div className="about-limitations__item" key={item}>
+            <span className="about-limitations__index">{`0${index + 1}`}</span>
+            <strong>{item}</strong>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1384,7 +1835,7 @@ function AboutContributorsVisual() {
           </a>
         ) : (
           <span className="about-contributors__empty">
-            Project GitHub link can be added here.
+            https://github.com/Paradox-9007/CBA-FRONTEND (Frontend Only)
           </span>
         )}
       </div>
@@ -1412,27 +1863,91 @@ function AboutContributorsVisual() {
   );
 }
 
+function AboutImageGallery({ images = [], kicker = "Supporting figures" }) {
+  if (!Array.isArray(images) || !images.length) {
+    return null;
+  }
+
+  return (
+    <div className="landing-about__visual landing-about__visual--gallery">
+      <span className="about-visual__kicker">{kicker}</span>
+      <div className="about-image-gallery">
+        {images.map((image) => (
+          <figure className="about-image-card" key={image.src}>
+            <img alt={image.alt} className="about-image-card__image" src={image.src} />
+            <figcaption className="about-image-card__caption">{image.caption}</figcaption>
+          </figure>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AboutParagraphGroup({ paragraphs, variant = "body" }) {
+  function renderHighlightedInteractionLabels(text) {
+    if (!text) {
+      return text;
+    }
+
+    const labelMatches = [
+      { label: "'No Interaction,'", className: "landing-about__label landing-about__label--red" },
+      { label: "'Touching Shelf,'", className: "landing-about__label landing-about__label--blue" },
+      { label: "'Holding Product,'", className: "landing-about__label landing-about__label--orange" },
+      { label: "'Item Removed.'", className: "landing-about__label landing-about__label--purple" },
+    ];
+
+    const escapedPattern = labelMatches.map((match) => match.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+    const parts = text.split(new RegExp(`(${escapedPattern})`));
+
+    return parts.map((part, index) => {
+      const matchedLabel = labelMatches.find((match) => match.label === part);
+      if (!matchedLabel) {
+        return <span key={`${part}-${index}`}>{part}</span>;
+      }
+      return (
+        <span className={matchedLabel.className} key={`${part}-${index}`}>
+          {part}
+        </span>
+      );
+    });
+  }
+
   return (
     <div className={`landing-about__text-flow landing-about__text-flow--${variant}`}>
-      {paragraphs.map((paragraph, index) => (
-        <p className="landing-about__paragraph" key={`${paragraph.text.slice(0, 24)}-${index}`}>
-          {paragraph.text}
-          {paragraph.href ? (
-            <>
-              {" "}
-              <a
-                className="landing-about__link"
-                href={paragraph.href}
-                rel="noreferrer"
-                target="_blank"
-              >
-                {paragraph.linkLabel ?? paragraph.href}
-              </a>
-            </>
-          ) : null}
-        </p>
-      ))}
+      {paragraphs.map((paragraph, index) => {
+        const isDemingQuote = paragraph.text.includes("Without data, you're just another person with an opinion.");
+
+        return (
+          <p
+            className={`landing-about__paragraph${isDemingQuote ? " landing-about__paragraph--quote" : ""}`}
+            key={`${paragraph.text.slice(0, 24)}-${index}`}
+          >
+            {paragraph.title ? <strong className="landing-about__paragraph-title">{paragraph.title}</strong> : null}
+            {paragraph.title ? " " : null}
+            {isDemingQuote ? (
+              <>
+                {"\"Without data, you're just another person with an opinion.\" "}
+                <span className="landing-about__quote-attribution">— W. Edwards Deming</span>
+              </>
+              ) : (
+                renderHighlightedInteractionLabels(paragraph.text)
+              )}
+            {paragraph.href ? (
+              <>
+                {" "}
+                <a
+                  className="landing-about__link"
+                  href={paragraph.href}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {paragraph.linkLabel ?? paragraph.href}
+                </a>
+              </>
+            ) : null}
+          </p>
+        );
+      })}
     </div>
   );
 }
@@ -1441,8 +1956,8 @@ function renderAboutVisual(visual) {
   if (visual === "comparison") {
     return <AboutComparisonVisual />;
   }
-  if (visual === "stack") {
-    return <AboutStackVisual />;
+  if (visual === "pipeline") {
+    return <AboutPipelineVisual />;
   }
   if (visual === "training") {
     return <AboutTrainingVisual />;
@@ -1452,6 +1967,9 @@ function renderAboutVisual(visual) {
   }
   if (visual === "impact") {
     return <AboutImpactVisual />;
+  }
+  if (visual === "limitations") {
+    return <AboutLimitationsVisual />;
   }
   if (visual === "contributors") {
     return <AboutContributorsVisual />;
@@ -1515,6 +2033,16 @@ function HomePage({ onStart }) {
               >
                 <h3>{section.title}</h3>
                 {renderAboutVisual(section.visual)}
+                {section.images?.length ? (
+                  <AboutImageGallery
+                    images={section.images}
+                    kicker={
+                      section.visual === "training"
+                        ? "Training outputs and evaluation figures"
+                        : "Limitation-related evaluation figures"
+                    }
+                  />
+                ) : null}
                 <AboutParagraphGroup
                   paragraphs={section.paragraphs}
                   variant={section.textVariant ?? "body"}
@@ -1768,7 +2296,7 @@ function ShelfZonePointReference() {
           stroke="rgba(255, 255, 255, 0.08)"
           width="216"
           x="12"
-          y="12"
+          y=" 2"
         />
         <path
           d="M48 50h144M42 86h156M35 122h170"
