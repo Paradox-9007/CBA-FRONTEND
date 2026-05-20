@@ -889,6 +889,13 @@ select {
     rgba(255, 255, 255, 0.04);
 }
 
+.upload-setup-modal__dropzone--minimal {
+  width: min(620px, 100%);
+  justify-self: center;
+  gap: 18px;
+  padding: 28px;
+}
+
 .upload-setup-modal__dropzone h3 {
   margin: 0;
   font-size: clamp(1.45rem, 2.5vw, 1.85rem);
@@ -1082,6 +1089,61 @@ select {
   background: rgba(8, 11, 16, 0.52);
 }
 
+.viewer-scene--setup {
+  background: #070a0f;
+}
+
+.viewer-video--setup {
+  object-fit: contain;
+  background: #070a0f;
+  transform-origin: center center;
+}
+
+.upload-setup-modal__canvas-guide {
+  position: absolute;
+  inset: 12px;
+  z-index: 6;
+  pointer-events: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  align-items: start;
+}
+
+.upload-setup-modal__canvas-guide span {
+  width: 28px;
+  height: 28px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(82, 167, 255, 0.16);
+  border: 1px solid rgba(82, 167, 255, 0.42);
+  color: #e7f1ff;
+  font-size: 0.85rem;
+  font-weight: 800;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+
+.upload-setup-modal__canvas-guide span:nth-child(1) {
+  justify-self: start;
+  align-self: start;
+}
+
+.upload-setup-modal__canvas-guide span:nth-child(2) {
+  justify-self: end;
+  align-self: start;
+}
+
+.upload-setup-modal__canvas-guide span:nth-child(3) {
+  justify-self: start;
+  align-self: end;
+}
+
+.upload-setup-modal__canvas-guide span:nth-child(4) {
+  justify-self: end;
+  align-self: end;
+}
+
 .upload-setup-modal__hint-bar {
   display: flex;
   flex-wrap: wrap;
@@ -1240,7 +1302,10 @@ select {
 }
 
 .shelf-zone-editor__handle span {
-  display: none;
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #0d131c;
 }
 
 .shelf-zone-editor.is-disabled .shelf-zone-editor__handle {

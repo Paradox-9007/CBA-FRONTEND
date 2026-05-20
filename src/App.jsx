@@ -49,6 +49,9 @@ const SHELF_ZONE_REFERENCE_ITEMS = [
   { label: 4, title: "Bottom right", description: "Place on the bottom-right corner of the shelf." },
 ];
 const HOME_ANNOTATION_ADVANCE_DEFAULT = -0.2;
+const PERSISTENT_ANALYTICS_STORAGE_KEY = "cba-persistent-product-events-v1";
+const MAX_PERSISTENT_ANALYTICS_EVENTS = 6000;
+const UPLOAD_CHUNK_SIZE_FALLBACK = 4 * 1024 * 1024;
 const ABOUT_INTRO_PARAGRAPHS = [
   {
     tone: "default",
@@ -289,6 +292,137 @@ function formatInsightName(name, count) {
   return name;
 }
 
+function applyOrientationToSize(size, orientation) {
+  const width = Number(size?.width ?? 0);
+  const height = Number(size?.height ?? 0);
+  if (!width || !height) {
+    return { width: 0, height: 0 };
+  }
+  if (orientation === "rotate_90_cw" || orientation === "rotate_90_ccw") {
+    return { width: height, height: width };
+  }
+  return { width, height };
+}
+
+function orientationTransform(orientation) {
+  if (orientation === "rotate_90_cw") {
+    return "rotate(90deg)";
+  }
+  if (orientation === "rotate_90_ccw") {
+    return "rotate(-90deg)";
+  }
+  if (orientation === "rotate_180") {
+    return "rotate(180deg)";
+  }
+  return "none";
+}
+
+function normalizePersistentAnalyticsEvent(event) {
+  if (!event || !["touching", "holding", "product_remove"].includes(event.event_type)) {
+    return null;
+  }
+
+  return {
+    camera_id: Number(event.camera_id ?? 0),
+    stream_id: String(event.stream_id ?? ""),
+    captured_at: String(event.captured_at ?? ""),
+    event_type: String(event.event_type ?? ""),
+    heatmap_x: Number(event.heatmap_x ?? 0),
+    heatmap_y: Number(event.heatmap_y ?? 0),
+    shelf_slot: String(event.shelf_slot ?? ""),
+    frame_index: Number(event.frame_index ?? 0),
+  };
+}
+
+function persistentAnalyticsEventKey(event) {
+  return [
+    event.stream_id,
+    event.captured_at,
+    event.event_type,
+    event.heatmap_x,
+    event.heatmap_y,
+    event.shelf_slot,
+    event.frame_index,
+  ].join("|");
+}
+
+function loadPersistentAnalyticsEvents() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(PERSISTENT_ANALYTICS_STORAGE_KEY);
+    if (!rawValue) {
+      return [];
+    }
+    const parsed = JSON.parse(rawValue);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map(normalizePersistentAnalyticsEvent)
+      .filter(Boolean)
+      .slice(-MAX_PERSISTENT_ANALYTICS_EVENTS);
+  } catch {
+    return [];
+  }
+}
+
+function persistAnalyticsEvents(events) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(PERSISTENT_ANALYTICS_STORAGE_KEY, JSON.stringify(events));
+  } catch {
+    // Ignore storage write failures and keep in-memory state alive.
+  }
+}
+
+function accumulatePersistentAnalyticsEvents(currentEvents, incomingEvents) {
+  const normalizedIncoming = Array.isArray(incomingEvents)
+    ? incomingEvents.map(normalizePersistentAnalyticsEvent).filter(Boolean)
+    : [];
+
+  if (!normalizedIncoming.length) {
+    return currentEvents;
+  }
+
+  const combined = Array.isArray(currentEvents) ? [...currentEvents] : [];
+  const seenKeys = new Set(combined.map(persistentAnalyticsEventKey));
+  let addedCount = 0;
+
+  for (const event of normalizedIncoming) {
+    const key = persistentAnalyticsEventKey(event);
+    if (seenKeys.has(key)) {
+      continue;
+    }
+    combined.push(event);
+    seenKeys.add(key);
+    addedCount += 1;
+  }
+
+  if (addedCount === 0 && combined.length <= MAX_PERSISTENT_ANALYTICS_EVENTS) {
+    return currentEvents;
+  }
+
+  return combined.slice(-MAX_PERSISTENT_ANALYTICS_EVENTS);
+}
+
+function historyRowsToEventPoints(historyEvents = [], rows = 18, cols = 32) {
+  return historyEvents
+    .filter((event) => ["touching", "holding", "product_remove"].includes(event?.event_type))
+    .map((event, index) => ({
+      id: `${persistentAnalyticsEventKey(event)}-${index}`,
+      kind: event.event_type,
+      x: clamp(Number(event.heatmap_x ?? 0) / Math.max(cols - 1, 1), 0, 1),
+      y: clamp(Number(event.heatmap_y ?? 0) / Math.max(rows - 1, 1), 0, 1),
+      capturedAt: event.captured_at ?? "",
+    }));
+}
+
 function insideRect(point, rect) {
   return (
     point.x >= rect.x &&
@@ -389,6 +523,89 @@ function pointInNormalizedPolygon(point, polygon) {
     }
   }
   return inside;
+}
+
+function interactionKindPriority(kind) {
+  if (kind === "product_remove") {
+    return 3;
+  }
+  if (kind === "holding") {
+    return 2;
+  }
+  if (kind === "touching") {
+    return 1;
+  }
+  return 0;
+}
+
+function stabilizeInteractionPoints(points) {
+  if (!Array.isArray(points) || !points.length) {
+    return [];
+  }
+
+  const mergedPoints = [];
+  for (const point of points) {
+    const nextPoint = {
+      ...point,
+      x: Number(point?.x ?? 0),
+      y: Number(point?.y ?? 0),
+      heatmap_x: Number(point?.heatmap_x ?? -1),
+      heatmap_y: Number(point?.heatmap_y ?? -1),
+      shelf_slot: point?.shelf_slot ? String(point.shelf_slot) : "",
+    };
+
+    let bestMatch = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (const candidate of mergedPoints) {
+      const sameSlot =
+        nextPoint.shelf_slot &&
+        candidate.shelf_slot &&
+        nextPoint.shelf_slot === candidate.shelf_slot;
+      const heatmapDistance =
+        nextPoint.heatmap_x >= 0 &&
+        nextPoint.heatmap_y >= 0 &&
+        candidate.heatmap_x >= 0 &&
+        candidate.heatmap_y >= 0
+          ? Math.hypot(nextPoint.heatmap_x - candidate.heatmap_x, nextPoint.heatmap_y - candidate.heatmap_y)
+          : Number.POSITIVE_INFINITY;
+      const normalizedDistance = Math.hypot(nextPoint.x - candidate.x, nextPoint.y - candidate.y);
+      const isMatch =
+        (sameSlot && heatmapDistance <= 2.5) ||
+        normalizedDistance <= 0.035;
+
+      if (!isMatch) {
+        continue;
+      }
+
+      const score = Math.min(heatmapDistance, normalizedDistance * 100);
+      if (score < bestScore) {
+        bestScore = score;
+        bestMatch = candidate;
+      }
+    }
+
+    if (!bestMatch) {
+      mergedPoints.push(nextPoint);
+      continue;
+    }
+
+    bestMatch.x = Number(((bestMatch.x + nextPoint.x) / 2).toFixed(4));
+    bestMatch.y = Number(((bestMatch.y + nextPoint.y) / 2).toFixed(4));
+    if (!bestMatch.shelf_slot && nextPoint.shelf_slot) {
+      bestMatch.shelf_slot = nextPoint.shelf_slot;
+    }
+    if (bestMatch.heatmap_x < 0 && nextPoint.heatmap_x >= 0) {
+      bestMatch.heatmap_x = nextPoint.heatmap_x;
+      bestMatch.heatmap_y = nextPoint.heatmap_y;
+    }
+    if (interactionKindPriority(nextPoint.kind) >= interactionKindPriority(bestMatch.kind)) {
+      bestMatch.kind = nextPoint.kind;
+      bestMatch.label = nextPoint.label;
+      bestMatch.updated_at = nextPoint.updated_at ?? bestMatch.updated_at;
+    }
+  }
+
+  return mergedPoints;
 }
 
 function filterPointsToShelfZone(points, shelfZone) {
@@ -1805,6 +2022,9 @@ export default function App() {
   const [sampleReplayError, setSampleReplayError] = useState("");
   const [sampleReplayStepIndex, setSampleReplayStepIndex] = useState(0);
   const [sampleVideoStatus, setSampleVideoStatus] = useState("idle");
+  const [persistentAnalyticsEvents, setPersistentAnalyticsEvents] = useState(() =>
+    loadPersistentAnalyticsEvents(),
+  );
   const [heatmapFilter, setHeatmapFilter] = useState("all");
   const [metrics, setMetrics] = useState([]);
   const [heatmapData, setHeatmapData] = useState(null);
@@ -1816,6 +2036,8 @@ export default function App() {
   const [selectedCustomProductId, setSelectedCustomProductId] = useState("");
   const [draftProduct, setDraftProduct] = useState(null);
   const [streamUploadFile, setStreamUploadFile] = useState(null);
+  const [streamUploadPreviewUrl, setStreamUploadPreviewUrl] = useState("");
+  const [streamUploadProgress, setStreamUploadProgress] = useState(0);
   const [streamUploadStatus, setStreamUploadStatus] = useState("");
   const [streamUploadError, setStreamUploadError] = useState("");
   const [isUploadingStream, setIsUploadingStream] = useState(false);
@@ -1824,6 +2046,7 @@ export default function App() {
   const [setupOrientation, setSetupOrientation] = useState("none");
   const [isUpdatingSetupPreview, setIsUpdatingSetupPreview] = useState(false);
   const [setupPreviewVersion, setSetupPreviewVersion] = useState(0);
+  const [setupVideoSize, setSetupVideoSize] = useState({ width: 0, height: 0 });
   const [shelfZoneDraft, setShelfZoneDraft] = useState(() => normalizeShelfZoneDraft([]));
   const [shelfZoneStatus, setShelfZoneStatus] = useState("");
   const [shelfZoneError, setShelfZoneError] = useState("");
@@ -1857,6 +2080,20 @@ export default function App() {
       delete document.body.dataset.page;
     };
   }, [onActionPage]);
+
+  useEffect(() => {
+    persistAnalyticsEvents(persistentAnalyticsEvents);
+  }, [persistentAnalyticsEvents]);
+
+  useEffect(() => {
+    if (!streamUploadFile) {
+      setStreamUploadPreviewUrl("");
+      setSetupStream(null);
+      setSetupVideoSize({ width: 0, height: 0 });
+      return undefined;
+    }
+    return undefined;
+  }, [streamUploadFile]);
 
   useEffect(() => {
     let ignore = false;
@@ -2165,9 +2402,11 @@ export default function App() {
   const currentPersistentPoints = useMemo(
     () =>
       usesRecordedSampleReplay
-        ? filterPointsToShelfZone(
-            currentReplayFrame?.replay_points ?? currentReplayFrame?.persistent_points ?? [],
-            selectedStream?.shelf_zone,
+        ? stabilizeInteractionPoints(
+            filterPointsToShelfZone(
+              currentReplayFrame?.replay_points ?? currentReplayFrame?.persistent_points ?? [],
+              selectedStream?.shelf_zone,
+            ),
           )
         : [],
     [currentReplayFrame, selectedStream?.shelf_zone, usesRecordedSampleReplay],
@@ -2192,12 +2431,11 @@ export default function App() {
       : metricForCamera(metrics, selectedStream?.camera_id);
   const currentPersonBoxes = currentMetric?.person_boxes ?? [];
   const currentBehaviorBoxes = currentMetric?.behavior_boxes ?? [];
-  const historicalEventPoints = useMemo(
-    () =>
-      usesRecordedSampleReplay ? [] : buildHistoricalEventPoints(effectiveHeatmapData, effectiveShelfAnalysis),
-    [effectiveHeatmapData, effectiveShelfAnalysis, usesRecordedSampleReplay],
+  const accumulatedEventPoints = useMemo(
+    () => historyRowsToEventPoints(persistentAnalyticsEvents),
+    [persistentAnalyticsEvents],
   );
-  const boardEventPoints = usesRecordedSampleReplay ? currentPersistentPoints : historicalEventPoints;
+  const boardEventPoints = accumulatedEventPoints;
   const deferredBoardEventPoints = useDeferredValue(boardEventPoints);
   const activeProductLayout =
     productLayoutMode === "example2"
@@ -2230,11 +2468,11 @@ export default function App() {
     ? "Upload a video first, then configure the shelf trapezium to begin custom analysis."
     : selectedStream?.is_custom
     ? selectedStreamHasShelfZone
-      ? `Using ${formatNumber(effectiveShelfAnalysis?.history_event_count ?? 0)} stored interaction events from your uploaded video.`
+      ? `Using ${formatNumber(persistentAnalyticsEvents.length)} accumulated interaction events across all processed videos.`
       : "Save the shelf trapezium on your uploaded video first to start generating interaction history."
     : usesRecordedSampleReplay
-      ? `Showing ${formatNumber(currentPersistentPoints.length)} persistent interaction points and ${formatNumber(replayVisibleHistoryEvents.length)} recorded interactions so far for ${selectedStream?.name ?? "the selected sample"}.`
-      : `Using ${formatNumber(effectiveShelfAnalysis?.history_event_count ?? 0)} recorded interaction events combined from all example videos, with a rolling cap of ${formatNumber(effectiveShelfAnalysis?.history_limit ?? 0)} per stream.`;
+      ? `Showing ${formatNumber(currentPersistentPoints.length)} live interaction points. The Product Overlay Board is accumulating ${formatNumber(persistentAnalyticsEvents.length)} events across all processed videos with a rolling cap of ${formatNumber(MAX_PERSISTENT_ANALYTICS_EVENTS)}.`
+      : `Using ${formatNumber(persistentAnalyticsEvents.length)} accumulated interaction events across all processed videos with a rolling cap of ${formatNumber(MAX_PERSISTENT_ANALYTICS_EVENTS)}.`;
   const sampleReplayStatusMessage = sampleReplayError
     ? sampleReplayError
     : sampleVideoStatus === "playing"
@@ -2246,6 +2484,18 @@ export default function App() {
           : sampleVideoStatus === "loading"
             ? "Loading recorded sample video..."
             : "Recorded sample replay is idle.";
+
+  useEffect(() => {
+    const incomingEvents = usesRecordedSampleReplay
+      ? replayVisibleHistoryEvents
+      : effectiveShelfAnalysis?.history_events ?? [];
+
+    if (!incomingEvents.length) {
+      return;
+    }
+
+    setPersistentAnalyticsEvents((current) => accumulatePersistentAnalyticsEvents(current, incomingEvents));
+  }, [effectiveShelfAnalysis?.history_events, replayVisibleHistoryEvents, usesRecordedSampleReplay]);
 
   function updateCustomProductName(nextName) {
     setCustomProducts((current) =>
@@ -2275,11 +2525,14 @@ export default function App() {
   function openUploadModal() {
     setIsUploadModalOpen(true);
     setStreamUploadFile(null);
+    setStreamUploadPreviewUrl("");
+    setStreamUploadProgress(0);
     setStreamUploadError("");
-    setStreamUploadStatus("Choose a shelf video to start the setup flow.");
+    setStreamUploadStatus("Choose a shelf video to begin.");
     setSetupStream(null);
     setSetupOrientation("none");
     setSetupPreviewVersion(0);
+    setSetupVideoSize({ width: 0, height: 0 });
     setShelfZoneDraft(normalizeShelfZoneDraft([]));
     setShelfZoneError("");
     setShelfZoneStatus("");
@@ -2296,33 +2549,86 @@ export default function App() {
       return;
     }
 
-    const formData = new FormData();
-    formData.append("file", streamUploadFile);
-
     setIsUploadingStream(true);
     setStreamUploadError("");
-    setStreamUploadStatus("Uploading video to the analysis backend...");
+    setShelfZoneError("");
+    setStreamUploadProgress(0);
+    setStreamUploadStatus("Preparing upload session...");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/camera-streams/upload`, {
+      const sessionResponse = await fetch(`${API_BASE_URL}/camera-streams/upload-sessions`, {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          orientation: setupOrientation,
+          filename: streamUploadFile.name,
+          file_size: streamUploadFile.size,
+          content_type: streamUploadFile.type,
+          display_name: streamUploadFile.name.replace(/\.[^.]+$/, ""),
+        }),
       });
-
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(payload?.detail || "Could not upload the video.");
+      const sessionPayload = await sessionResponse.json().catch(() => ({}));
+      if (!sessionResponse.ok) {
+        throw new Error(sessionPayload?.detail || "Could not start the upload session.");
       }
 
-      const uploadedStream = payload?.stream;
-      setSetupStream(uploadedStream ?? null);
-      setSetupOrientation(uploadedStream?.orientation ?? "none");
-      setSetupPreviewVersion((current) => current + 1);
-      setShelfZoneDraft(normalizeShelfZoneDraft(uploadedStream?.shelf_zone));
-      setStreamUploadStatus(
-        "Video uploaded. Rotate it if needed, place the shelf trapezium, then start analysis.",
+      const sessionId = sessionPayload?.session_id;
+      const chunkSize = Number(sessionPayload?.chunk_size ?? UPLOAD_CHUNK_SIZE_FALLBACK);
+      if (!sessionId) {
+        throw new Error("Upload session could not be created.");
+      }
+
+      const chunkCount = Math.max(1, Math.ceil(streamUploadFile.size / chunkSize));
+      for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
+        const startOffset = chunkIndex * chunkSize;
+        const endOffset = Math.min(streamUploadFile.size, startOffset + chunkSize);
+        const chunk = streamUploadFile.slice(startOffset, endOffset);
+        setStreamUploadStatus(`Uploading ${chunkIndex + 1} of ${chunkCount} chunks...`);
+
+        const chunkResponse = await fetch(
+          `${API_BASE_URL}/camera-streams/upload-sessions/${sessionId}?index=${chunkIndex}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/octet-stream",
+            },
+            body: chunk,
+          },
+        );
+        const chunkPayload = await chunkResponse.json().catch(() => ({}));
+        if (!chunkResponse.ok) {
+          throw new Error(chunkPayload?.detail || "Could not upload the video chunk.");
+        }
+        setStreamUploadProgress(endOffset / Math.max(streamUploadFile.size, 1));
+      }
+
+      setStreamUploadStatus("Preparing backend preview...");
+      const completeResponse = await fetch(
+        `${API_BASE_URL}/camera-streams/upload-sessions/${sessionId}/complete`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            orientation: setupOrientation,
+            display_name: streamUploadFile.name.replace(/\.[^.]+$/, ""),
+          }),
+        },
       );
-      setStreamUploadFile(null);
+      const completePayload = await completeResponse.json().catch(() => ({}));
+      if (!completeResponse.ok) {
+        throw new Error(completePayload?.detail || "Could not prepare the uploaded video.");
+      }
+
+      const uploadedStream = completePayload?.stream;
+      setSetupStream(uploadedStream ?? null);
+      setSetupOrientation(uploadedStream?.orientation ?? setupOrientation);
+      setSetupPreviewVersion((current) => current + 1);
+      setShelfZoneDraft(normalizeShelfZoneDraft(uploadedStream?.shelf_zone ?? []));
+      setStreamUploadStatus("Video uploaded. Rotate it if needed, adjust the shelf zone, then confirm.");
     } catch (error) {
       setStreamUploadError(error.message || "Could not upload the video.");
       setStreamUploadStatus("");
@@ -2354,7 +2660,6 @@ export default function App() {
         },
         body: JSON.stringify({ orientation: nextOrientation }),
       });
-
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(payload?.detail || "Could not update the video rotation.");
@@ -2374,12 +2679,14 @@ export default function App() {
 
   async function finalizeUploadedStreamSetup() {
     if (!setupStream?.stream_id) {
+      setStreamUploadError("Upload the video first.");
       return;
     }
 
     setIsSavingShelfZone(true);
     setShelfZoneError("");
-    setShelfZoneStatus("Saving setup and starting analysis...");
+    setShelfZoneStatus("");
+    setStreamUploadStatus("Saving setup and starting analysis...");
 
     try {
       const response = await fetch(`${API_BASE_URL}/camera-streams/${setupStream.stream_id}/shelf-zone`, {
@@ -2395,20 +2702,19 @@ export default function App() {
 
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload?.detail || "Could not start analysis for the uploaded stream.");
+        throw new Error(payload?.detail || "Could not start analysis for the uploaded video.");
       }
 
       const updatedStream = payload?.stream;
       await loadStreams(updatedStream?.stream_id ?? setupStream.stream_id);
       setSelectedStreamId(updatedStream?.stream_id ?? setupStream.stream_id);
       setSelectedViewMode("live");
-      setSetupStream(updatedStream ?? null);
-      setShelfZoneDraft(normalizeShelfZoneDraft(updatedStream?.shelf_zone));
-      setShelfZoneStatus("Setup saved.");
-      setStreamUploadStatus("");
+      setShelfZoneDraft(normalizeShelfZoneDraft(updatedStream?.shelf_zone ?? []));
+      setShelfZoneStatus("Analysis started.");
+      setStreamUploadStatus("Setup complete.");
       setIsUploadModalOpen(false);
     } catch (error) {
-      setShelfZoneError(error.message || "Could not start analysis for the uploaded stream.");
+      setShelfZoneError(error.message || "Could not start analysis for the uploaded video.");
       setShelfZoneStatus("");
     } finally {
       setIsSavingShelfZone(false);
@@ -2893,6 +3199,27 @@ export default function App() {
           }}
         >
           <div className="upload-setup-modal__panel">
+            <input
+              accept="video/*,.mp4,.mov,.avi,.mkv,.webm"
+              className="upload-setup-modal__file-input"
+              id="stream-upload"
+              type="file"
+              onChange={(event) => {
+                const nextFile = event.target.files?.[0] ?? null;
+                setStreamUploadFile(nextFile);
+                setSetupStream(null);
+                setSetupOrientation("none");
+                setSetupPreviewVersion(0);
+                setShelfZoneDraft(normalizeShelfZoneDraft([]));
+                setStreamUploadProgress(0);
+                setStreamUploadError("");
+                setShelfZoneError("");
+                setShelfZoneStatus("");
+                if (nextFile) {
+                  setStreamUploadStatus(`Ready to configure ${nextFile.name}.`);
+                }
+              }}
+            />
             <div className="upload-setup-modal__header">
               <div>
                 <p className="eyebrow">Upload Video</p>
@@ -2911,121 +3238,60 @@ export default function App() {
 
             {!setupStream ? (
               <div className="upload-setup-modal__intro">
-                <div className="upload-setup-modal__intro-grid">
-                  <div className="upload-setup-modal__dropzone">
-                    <div className="upload-setup-modal__section-heading">
-                      <span className="viewer-mode-label">Step 1</span>
-                      <h3>Upload your shelf video</h3>
-                      <p className="muted-text">
-                        Choose a shelf-facing video first. Nothing will be analyzed until you
-                        rotate the preview, place the four shelf points, and confirm the setup.
-                      </p>
-                    </div>
-
-                    <div className="upload-setup-modal__file-picker">
-                      <input
-                        accept="video/*,.mp4,.mov,.avi,.mkv,.webm"
-                        className="upload-setup-modal__file-input"
-                        id="stream-upload"
-                        type="file"
-                        onChange={(event) => {
-                          const nextFile = event.target.files?.[0] ?? null;
-                          setStreamUploadFile(nextFile);
-                          setStreamUploadError("");
-                          if (nextFile) {
-                            setStreamUploadStatus(`Ready to upload ${nextFile.name}.`);
-                          }
-                        }}
-                      />
-                      <label className="ghost-button upload-setup-modal__file-button" htmlFor="stream-upload">
-                        {streamUploadFile ? "Choose Another Video" : "Choose Video"}
-                      </label>
-                      <div className="upload-setup-modal__file-summary">
-                        <strong>{streamUploadFile?.name ?? "No video selected yet"}</strong>
-                        <span>
-                          {streamUploadFile
-                            ? `${formatFileSize(streamUploadFile.size)}${
-                                streamUploadFile.type ? ` | ${streamUploadFile.type}` : ""
-                              }`
-                            : "Supported formats: MP4, MOV, AVI, MKV, WEBM"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="upload-setup-modal__actions upload-setup-modal__actions--intro">
-                      <button
-                        className="upload-setup-modal__primary-button"
-                        disabled={!streamUploadFile || isUploadingStream}
-                        type="button"
-                        onClick={handleStreamUpload}
-                      >
-                        {isUploadingStream ? "Uploading..." : "Upload and Continue"}
-                      </button>
-                    </div>
-
-                    {streamUploadError ? <p className="error-text">{streamUploadError}</p> : null}
-                    {!streamUploadError && streamUploadStatus ? (
-                      <p className="muted-text">{streamUploadStatus}</p>
-                    ) : null}
+                <div className="upload-setup-modal__dropzone upload-setup-modal__dropzone--minimal">
+                  <div className="upload-setup-modal__section-heading">
+                    <span className="viewer-mode-label">Step 1</span>
+                    <h3>Choose a shelf video</h3>
+                    <p className="muted-text">
+                      Upload a video, rotate it if needed, drag the shelf zone, then confirm.
+                    </p>
                   </div>
 
-                  <aside className="upload-setup-modal__guide-card">
-                    <span className="viewer-mode-label">Setup flow</span>
-                    <div className="upload-setup-modal__step-flow">
-                      <div className="upload-setup-modal__step-item">
-                        <span>01</span>
-                        <div>
-                          <strong>Upload the video</strong>
-                          <p>Pick a shelf-facing clip and create a private custom stream.</p>
-                        </div>
-                      </div>
-                      <div className="upload-setup-modal__step-item">
-                        <span>02</span>
-                        <div>
-                          <strong>Rotate the preview</strong>
-                          <p>Make sure the shelf looks upright before setting the shelf zone.</p>
-                        </div>
-                      </div>
-                      <div className="upload-setup-modal__step-item">
-                        <span>03</span>
-                        <div>
-                          <strong>Place the four points</strong>
-                          <p>Match the point order guide so the shelf trapezium is mapped correctly.</p>
-                        </div>
-                      </div>
-                      <div className="upload-setup-modal__step-item">
-                        <span>04</span>
-                        <div>
-                          <strong>Start analysis</strong>
-                          <p>Once saved, the uploaded stream appears in the action view with your setup.</p>
-                        </div>
-                      </div>
+                  <div className="upload-setup-modal__file-picker">
+                    <label className="ghost-button upload-setup-modal__file-button" htmlFor="stream-upload">
+                      Choose Video
+                    </label>
+                    <div className="upload-setup-modal__file-summary">
+                      {streamUploadFile ? (
+                        <>
+                          <strong>{streamUploadFile.name}</strong>
+                          <span>{formatFileSize(streamUploadFile.size)}</span>
+                        </>
+                      ) : (
+                        <>
+                          <strong>No video selected yet</strong>
+                          <span>Supported formats: MP4, MOV, AVI, MKV, WEBM</span>
+                        </>
+                      )}
                     </div>
+                  </div>
 
-                    <div className="upload-setup-modal__reference-block">
-                      <h4>Point order reference</h4>
-                      <ShelfZonePointReference />
-                    </div>
-                  </aside>
+                  <div className="upload-setup-modal__actions">
+                    <button
+                      className="upload-setup-modal__primary-button"
+                      disabled={!streamUploadFile || isUploadingStream}
+                      type="button"
+                      onClick={handleStreamUpload}
+                    >
+                      {isUploadingStream ? "Uploading..." : "Upload and Continue"}
+                    </button>
+                  </div>
+
+                  {streamUploadError ? <p className="error-text">{streamUploadError}</p> : null}
+                  {!streamUploadError && streamUploadStatus ? (
+                    <p className="muted-text">{streamUploadStatus}</p>
+                  ) : null}
                 </div>
               </div>
             ) : (
               <div className="upload-setup-modal__workspace">
                 <div className="upload-setup-modal__preview">
-                  <div className="upload-setup-modal__step-strip">
-                    <span className="upload-setup-modal__step-pill is-complete">1. Uploaded</span>
-                    <span className="upload-setup-modal__step-pill is-active">2. Rotate</span>
-                    <span className="upload-setup-modal__step-pill is-active">3. Mark Shelf</span>
-                    <span className="upload-setup-modal__step-pill">4. Start Analysis</span>
-                  </div>
-
                   <div className="upload-setup-modal__preview-toolbar">
                     <div className="upload-setup-modal__section-heading">
-                      <span className="viewer-mode-label">Steps 2 and 3</span>
-                      <h3>Rotate the video, then fit the shelf trapezium</h3>
+                      <span className="viewer-mode-label">Step 2</span>
+                      <h3>Rotate and adjust the shelf zone</h3>
                       <p className="muted-text">
-                        Use the point order on the right: 1 top right, 2 top left, 3 bottom left,
-                        4 bottom right.
+                        Drag the four points until the blue trapezium matches the shelf area.
                       </p>
                     </div>
                     <div className="upload-setup-modal__rotation-row">
@@ -3034,7 +3300,6 @@ export default function App() {
                           className={`upload-setup-modal__rotation-button ${
                             setupOrientation === option.value ? "is-active" : ""
                           }`}
-                          disabled={isUpdatingSetupPreview}
                           key={option.value}
                           type="button"
                           onClick={() => updateSetupPreviewOrientation(option.value)}
@@ -3049,32 +3314,43 @@ export default function App() {
                     className="viewer-frame viewer-frame--interactive upload-setup-modal__viewer-frame"
                     style={setupViewerAspectStyle}
                   >
-                  <img
-                     alt={`${setupStream.name} setup preview`}
-                    className="viewer-image"
-                    key={`${setupStream.stream_id}-${setupPreviewVersion}`}
-                    src={`${API_BASE_URL}/camera-streams/${setupStream.stream_id}?preview=${setupPreviewVersion}`}
-                  />
-                  <ShelfZoneEditor
-                    disabled={isSavingShelfZone || isUpdatingSetupPreview}
-                    points={shelfZoneDraft}
-                    onChange={setShelfZoneDraft}
-                  />
+                    {setupStream?.stream_id ? (
+                      <div className="viewer-scene viewer-scene--setup">
+                        <img
+                          alt={`${setupStream?.name ?? "Uploaded video"} preview`}
+                          className="viewer-image viewer-image--setup"
+                          src={`${API_BASE_URL}/camera-streams/${setupStream.stream_id}?preview=${setupPreviewVersion}`}
+                        />
+                        <ShelfZoneEditor
+                          disabled={isSavingShelfZone || isUploadingStream || isUpdatingSetupPreview}
+                          points={shelfZoneDraft}
+                          onChange={setShelfZoneDraft}
+                        />
+                        <div className="upload-setup-modal__canvas-guide">
+                          <span>2</span>
+                          <span>1</span>
+                          <span>3</span>
+                          <span>4</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="viewer-empty">Video preview will appear here.</div>
+                    )}
                   </div>
 
                   <div className="upload-setup-modal__hint-bar">
-                    <span>Drag each point until it touches the matching shelf corner.</span>
-                    <strong>Analysis starts only after you click Start Analysis.</strong>
+                    <span>Rotate if needed, then drag each point to the shelf corners.</span>
+                    <strong>Analysis starts after you confirm.</strong>
                   </div>
                 </div>
 
                 <aside className="upload-setup-modal__sidebar">
                   <div className="upload-setup-modal__summary">
-                    <span className="viewer-mode-label">Current setup</span>
+                    <span className="viewer-mode-label">Step 3</span>
                     <div className="list-panel compact-list">
                       <div className="list-row">
-                        <span>uploaded stream</span>
-                        <strong>{setupStream.name}</strong>
+                        <span>video</span>
+                        <strong>{setupStream?.name ?? "Local preview"}</strong>
                       </div>
                       <div className="list-row">
                         <span>rotation</span>
@@ -3084,25 +3360,27 @@ export default function App() {
                         <span>shelf zone</span>
                         <strong>4 draggable points</strong>
                       </div>
+                      <div className="list-row">
+                        <span>upload progress</span>
+                        <strong>{`${Math.round(streamUploadProgress * 100)}%`}</strong>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="upload-setup-modal__guide-card">
-                    <span className="viewer-mode-label">Point order reference</span>
-                    <ShelfZonePointReference />
                   </div>
 
                   <div className="upload-setup-modal__actions">
                     <button className="ghost-button" type="button" onClick={resetShelfZoneDraft}>
                       Reset Trapezium
                     </button>
+                    <label className="ghost-button upload-setup-modal__file-button" htmlFor="stream-upload">
+                      Choose Another Video
+                    </label>
                     <button
                       className="upload-setup-modal__primary-button"
-                      disabled={isSavingShelfZone || isUpdatingSetupPreview}
+                      disabled={isSavingShelfZone || isUploadingStream || isUpdatingSetupPreview || !setupStream?.stream_id}
                       type="button"
                       onClick={finalizeUploadedStreamSetup}
                     >
-                      {isSavingShelfZone ? "Starting..." : "Start Analysis"}
+                      {isSavingShelfZone ? "Starting..." : "Confirm and Start Analysis"}
                     </button>
                   </div>
 
