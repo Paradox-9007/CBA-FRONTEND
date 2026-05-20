@@ -557,6 +557,16 @@ function stabilizeInteractionPoints(points) {
     let bestMatch = null;
     let bestScore = Number.POSITIVE_INFINITY;
     for (const candidate of mergedPoints) {
+      if (
+        nextPoint.marker_id != null &&
+        candidate.marker_id != null &&
+        Number(nextPoint.marker_id) === Number(candidate.marker_id)
+      ) {
+        bestMatch = candidate;
+        bestScore = -1;
+        break;
+      }
+
       const sameSlot =
         nextPoint.shelf_slot &&
         candidate.shelf_slot &&
