@@ -318,7 +318,7 @@ const ABOUT_OPERATIONAL_ACTIONS = [
   },
 ];
 const ABOUT_CONTRIBUTORS = [];
-const ABOUT_PROJECT_GITHUB_URL = "";
+const ABOUT_PROJECT_GITHUB_URL = "https://github.com/Paradox-9007/CBA-FRONTEND";
 const ABOUT_INSPIRATION_URL =
   "https://www.researchgate.net/profile/Hira-Kamal-3/publication/394022210_Customer_Object_Interaction_Analytics_in_Retail_Using_YOLOv5_Object_Detection/links/6884865e00a2407910a46e32/Customer-Object-Interaction-Analytics-in-Retail-Using-YOLOv5-Object-Detection.pdf";
 const ABOUT_INSPIRATION_LABEL =
@@ -1814,7 +1814,7 @@ function AboutContributorsVisual() {
                 </tr>
                 <tr>
                   <td>Pyae Sone Htut</td>
-                  <td>Business Analyst</td>
+                  <td>Business Advisor</td>
                   <td>pyaesonehtut002@gmail.com</td>
                 </tr>
               </>
@@ -1825,6 +1825,10 @@ function AboutContributorsVisual() {
       <div className="about-contributors__repo">
         <span className="about-contributors__repo-label">Project GitHub</span>
         {hasGithubLink ? (
+          <>
+          <span className="about-contributors__empty">
+            Frontend Only: 
+          </span>
           <a
             className="about-contributors__repo-link"
             href={ABOUT_PROJECT_GITHUB_URL}
@@ -1833,9 +1837,10 @@ function AboutContributorsVisual() {
           >
             {ABOUT_PROJECT_GITHUB_URL}
           </a>
-        ) : (
+           </>
+        ): (
           <span className="about-contributors__empty">
-            https://github.com/Paradox-9007/CBA-FRONTEND (Frontend Only)
+            Frontend Only: https://github.com/Paradox-9007/CBA-FRONTEND
           </span>
         )}
       </div>
