@@ -570,11 +570,6 @@ background: 0 10px 20px rgba(0, 122, 255, 0.3);
   padding: 24px 28px;
 }
 
-.analysis-title {
-  margin: 0;
-  font-size: clamp(1.8rem, 4vw, 3rem);
-}
-
 .eyebrow {
   margin: 0 0 12px;
   text-transform: uppercase;

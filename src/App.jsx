@@ -3014,7 +3014,7 @@ export default function App() {
       ? `Using ${formatNumber(persistentAnalyticsEvents.length)} accumulated interaction events across all processed videos.`
       : "Save the shelf trapezium on your uploaded video first to start generating interaction history."
     : usesRecordedSampleReplay
-      ? `Showing ${formatNumber(currentPersistentPoints.length)} live interaction points. The Product Overlay Board is accumulating ${formatNumber(persistentAnalyticsEvents.length)} events across all processed videos with a rolling cap of ${formatNumber(MAX_PERSISTENT_ANALYTICS_EVENTS)}.`
+      ? `The Product Overlay Board is accumulating ${formatNumber(persistentAnalyticsEvents.length)} events across all processed videos with a rolling cap of ${formatNumber(MAX_PERSISTENT_ANALYTICS_EVENTS)}.` // Showing ${formatNumber(currentPersistentPoints.length)} live interaction points. 
       : `Using ${formatNumber(persistentAnalyticsEvents.length)} accumulated interaction events across all processed videos with a rolling cap of ${formatNumber(MAX_PERSISTENT_ANALYTICS_EVENTS)}.`;
   const sampleReplayStatusMessage = sampleReplayError
     ? sampleReplayError
@@ -3369,8 +3369,7 @@ export default function App() {
       <header className="analysis-header">
         <div>
           <p className="eyebrow">Customer Behaviour Analysis</p>
-          <h1 className="analysis-title">Live monitoring dashboard</h1>
-          <p className="muted-text">Backend-rendered stream, live KPIs, and shelf product overlays.</p>
+          <p className="muted-text">Frontend-rendered streaming with pre-recorded model outputs are use to reduce performance bottlenecks.</p>
         </div>
         <button className="ghost-button" type="button" onClick={() => navigateTo("/")}>
           Back Home
@@ -3562,8 +3561,7 @@ export default function App() {
             <p className="eyebrow">Product Analysis</p>
             <h2>Product overlay board</h2>
             <p className="muted-text">
-              Historical heatmap-event CSV data now drives the product rectangles, colors, and
-              rankings below.
+              Points overlaying system draws interaction points on the trapezium zone of camera view, then maps them onto the real shelf layout to understand product-level interactions.
             </p>
           </div>
 
