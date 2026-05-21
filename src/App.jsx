@@ -3369,7 +3369,7 @@ export default function App() {
       <header className="analysis-header">
         <div>
           <p className="eyebrow">Customer Behaviour Analysis</p>
-          <p className="muted-text">Frontend-rendered streaming with pre-recorded model outputs are use to reduce performance bottlenecks.</p>
+          <p className="muted-text">Frontend-rendered streaming with pre-recorded model outputs are used to reduce performance bottlenecks.</p>
         </div>
         <button className="ghost-button" type="button" onClick={() => navigateTo("/")}>
           Back Home
